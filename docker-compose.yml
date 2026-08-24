@@ -1,0 +1,127 @@
+services:
+  frontend:
+    image: crud-nextjs-frontend-multistage-final:latest
+    build:
+      context: ./CRUD-nextjs-frontend
+      args:
+        NEXT_PUBLIC_PARSE_APP_ID: ${PARSE_APP_ID:-myAppId}
+        NEXT_PUBLIC_PARSE_SERVER_URL: ${PARSE_SERVER_URL:-http://localhost:1338/parse}
+    container_name: crud-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_PARSE_APP_ID: ${PARSE_APP_ID:-myAppId}
+      NEXT_PUBLIC_PARSE_SERVER_URL: ${PARSE_SERVER_URL:-http://localhost:1338/parse}
+      HOSTNAME: "0.0.0.0"
+    ports:
+      - "3003:3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1:3000",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+  backend:
+    image: crud-parse-server-backend-multistage-final:latest
+    build:
+      context: ./CRUD-parse-server-backend
+    container_name: crud-backend
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "1338:1337"
+    environment:
+      DATABASE_URI: mongodb://${MONGO_ROOT_USER:-root}:${MONGO_ROOT_PASSWORD:-WLRQqhadcYQGqyfC}@database:27017/${MONGO_DB_NAME:-parse}?authSource=admin
+      APP_ID: ${PARSE_APP_ID:-myAppId}
+      MASTER_KEY: ${PARSE_MASTER_KEY:-myMasterKey}
+      SERVER_URL: ${PARSE_SERVER_URL:-http://localhost:1338/parse}
+      PORT: 1337
+      MASTER_KEY_IPS: ${MASTER_KEY_IPS:-0.0.0.0/0,::0}
+    volumes:
+      - ./CRUD-parse-server-backend/cloud:/parse-server/cloud
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:1337/parse/health",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  backend-dashboard:
+    image: parseplatform/parse-dashboard:latest
+    container_name: crud-backend-dashboard
+    restart: unless-stopped
+    ports:
+      - "4041:4040"
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      PARSE_DASHBOARD_APP_ID: ${PARSE_APP_ID:-myAppId}
+      PARSE_DASHBOARD_MASTER_KEY: ${PARSE_MASTER_KEY:-myMasterKey}
+      PARSE_DASHBOARD_USER_ID: ${DASHBOARD_USER:-admin}
+      PARSE_DASHBOARD_USER_PASSWORD: ${DASHBOARD_PASSWORD:-admin}
+      PARSE_DASHBOARD_SERVER_URL: http://localhost:1338/parse
+      PARSE_DASHBOARD_APP_NAME: ${PARSE_APP_NAME:-CRUD Demo}
+      PARSE_DASHBOARD_ALLOW_INSECURE_HTTP: "1"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:4040",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  database:
+    image: mongo:latest
+    container_name: crud-database
+    restart: unless-stopped
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-WLRQqhadcYQGqyfC}
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME:-parse}
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: >
+        mongosh --quiet
+        -u ${MONGO_ROOT_USER:-root}
+        -p ${MONGO_ROOT_PASSWORD:-WLRQqhadcYQGqyfC}
+        --authenticationDatabase admin
+        --eval "db.adminCommand('ping')"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  mongo-data:
