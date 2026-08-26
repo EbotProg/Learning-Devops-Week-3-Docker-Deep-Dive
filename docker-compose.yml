@@ -1,6 +1,7 @@
 services:
   frontend:
-    image: crud-nextjs-frontend-multistage-final:latest
+    # image: crud-nextjs-frontend-multistage-final:latest
+    image: 110566986807.dkr.ecr.eu-north-1.amazonaws.com/crud-nextjs-frontend
     build:
       context: ./CRUD-nextjs-frontend
       args:
@@ -33,7 +34,8 @@ services:
       retries: 5
       start_period: 15s
   backend:
-    image: crud-parse-server-backend-multistage-final:latest
+    # image: crud-parse-server-backend-multistage-final:latest
+    image: 110566986807.dkr.ecr.eu-north-1.amazonaws.com/crud-parse-server-backend
     build:
       context: ./CRUD-parse-server-backend
     container_name: crud-backend
