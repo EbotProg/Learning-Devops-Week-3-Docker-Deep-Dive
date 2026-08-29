@@ -1,1 +1,42 @@
-.claude/
+# --- Secrets — never commit these ---------------------------------------
+.env
+.env.*
+!.env.example
+QRCode.png
+*.pem
+*.key
+
+# --- Node / npm / yarn / pnpm -----------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.pnpm-store/
+
+# --- Next.js frontend --------------------------------------------------
+.next/
+out/
+next-env.d.ts
+
+# --- Parse Server backend (compiled TypeScript output) ----------------------
+dist/
+*.tsbuildinfo
+
+# --- Logs -----------------------------------------------------------------
+logs/
+*.log
+
+# --- Docker -----------------------------------------------------------------
+# Local override files some setups use for dev-only tweaks
+docker-compose.override.yml
+
+# --- OS / editor cruft -------------------------------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# --- AWS CLI (in case anything gets configured inside the repo folder) ------
+.aws/

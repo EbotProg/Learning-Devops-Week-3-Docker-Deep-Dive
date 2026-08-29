@@ -1,7 +1,6 @@
 services:
   frontend:
-    # image: crud-nextjs-frontend-multistage-final:latest
-    image: 110566986807.dkr.ecr.eu-north-1.amazonaws.com/crud-nextjs-frontend
+    image: ${ECR_REGISTRY:?Set ECR_REGISTRY in .env, e.g. <account-id>.dkr.ecr.<region>.amazonaws.com}/crud-nextjs-frontend:${IMAGE_TAG:?Set IMAGE_TAG in .env, e.g. v1.0.0}
     build:
       context: ./CRUD-nextjs-frontend
       args:
@@ -33,9 +32,9 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+
   backend:
-    # image: crud-parse-server-backend-multistage-final:latest
-    image: 110566986807.dkr.ecr.eu-north-1.amazonaws.com/crud-parse-server-backend
+    image: ${ECR_REGISTRY:?Set ECR_REGISTRY in .env, e.g. <account-id>.dkr.ecr.<region>.amazonaws.com}/crud-parse-server-backend:${IMAGE_TAG:?Set IMAGE_TAG in .env, e.g. v1.0.0}
     build:
       context: ./CRUD-parse-server-backend
     container_name: crud-backend
@@ -46,9 +45,9 @@ services:
     ports:
       - "1338:1337"
     environment:
-      DATABASE_URI: mongodb://${MONGO_ROOT_USER:-root}:${MONGO_ROOT_PASSWORD:-WLRQqhadcYQGqyfC}@database:27017/${MONGO_DB_NAME:-parse}?authSource=admin
+      DATABASE_URI: mongodb://${MONGO_ROOT_USER:-root}:${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}@database:27017/${MONGO_DB_NAME:-parse}?authSource=admin
       APP_ID: ${PARSE_APP_ID:-myAppId}
-      MASTER_KEY: ${PARSE_MASTER_KEY:-myMasterKey}
+      MASTER_KEY: ${PARSE_MASTER_KEY:?Set PARSE_MASTER_KEY in .env}
       SERVER_URL: ${PARSE_SERVER_URL:-http://localhost:1338/parse}
       PORT: 1337
       MASTER_KEY_IPS: ${MASTER_KEY_IPS:-0.0.0.0/0,::0}
@@ -80,9 +79,9 @@ services:
         condition: service_healthy
     environment:
       PARSE_DASHBOARD_APP_ID: ${PARSE_APP_ID:-myAppId}
-      PARSE_DASHBOARD_MASTER_KEY: ${PARSE_MASTER_KEY:-myMasterKey}
+      PARSE_DASHBOARD_MASTER_KEY: ${PARSE_MASTER_KEY:?Set PARSE_MASTER_KEY in .env}
       PARSE_DASHBOARD_USER_ID: ${DASHBOARD_USER:-admin}
-      PARSE_DASHBOARD_USER_PASSWORD: ${DASHBOARD_PASSWORD:-admin}
+      PARSE_DASHBOARD_USER_PASSWORD: ${DASHBOARD_PASSWORD:?Set DASHBOARD_PASSWORD in .env}
       PARSE_DASHBOARD_SERVER_URL: http://localhost:1338/parse
       PARSE_DASHBOARD_APP_NAME: ${PARSE_APP_NAME:-CRUD Demo}
       PARSE_DASHBOARD_ALLOW_INSECURE_HTTP: "1"
@@ -109,7 +108,7 @@ services:
       - "27018:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-root}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-WLRQqhadcYQGqyfC}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}
       MONGO_INITDB_DATABASE: ${MONGO_DB_NAME:-parse}
     volumes:
       - mongo-data:/data/db
@@ -117,7 +116,7 @@ services:
       test: >
         mongosh --quiet
         -u ${MONGO_ROOT_USER:-root}
-        -p ${MONGO_ROOT_PASSWORD:-WLRQqhadcYQGqyfC}
+        -p ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}
         --authenticationDatabase admin
         --eval "db.adminCommand('ping')"
       interval: 10s
