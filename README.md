@@ -81,6 +81,11 @@ Measured directly via `docker images` / Docker Desktop:
 | Next.js frontend     | 1.01 GB              | 201.32 MB   | ~80% smaller |
 | Parse Server backend | 375.64 MB            | 288.42 MB   | ~23% smaller |
 
+![Frontend basic image size](screenshots/08-frontend-basic-size.png)
+![Frontend multi-stage image size](screenshots/09-frontend-multistage-size.png)
+![Backend basic image size](screenshots/10-backend-basic-size.png)
+![Backend multi-stage image size](screenshots/11-backend-multistage-size.png)
+
 The frontend's reduction is dramatic because the basic version ships the entire
 `node_modules` install (including dev dependencies and the Next.js compiler itself)
 into the runtime image, while the multi-stage version keeps only the standalone
@@ -264,6 +269,11 @@ aws ecr create-repository --repository-name crud-parse-server-backend --region <
 aws ecr create-repository --repository-name crud-nextjs-frontend --region <region>
 ```
 
+![ecr-deploy-user IAM permissions](screenshots/07-ecr-deploy-user.png)
+_This user has 3 attached policies total — only `AmazonEC2ContainerRegistryFullAccess`
+is visible in the screenshot above, since it's the one actually relevant to this
+project._
+
 > **Note:** the milestone spec calls for semantic version tags, not `:latest`.
 > `v1.0.0` above is a placeholder; bump it to match whatever versioning scheme
 > you're actually using (or start one now if there isn't one yet).
@@ -298,6 +308,9 @@ docker compose up -d
 > in this case was already attached (`assumed-role/ec2-repository-role/...`),
 > meaning no access keys ever needed to touch the server at all.
 
+![EC2 instance IAM role](screenshots/05-instance-iam-role.png)
+![ec2-repository-role attached policy](screenshots/06-iam-role-policy.png)
+
 > **Lesson learned — `sudo docker` and plain `docker` don't share a login:**
 > `sudo docker compose up` and plain `docker compose up` read Docker config from two
 > _different_ locations (`/root/.docker/config.json` vs
@@ -315,6 +328,8 @@ docker compose up -d
 > independent firewall — it must also explicitly allow the same ports, or UFW being
 > correct won't matter.
 
+![Security group inbound rules](screenshots/04-security-group.png)
+
 > **Still open / not yet confirmed:** Parse Dashboard showed `(unhealthy)` in
 > `docker ps` despite logs showing it running fine — suspected to be the same
 > host-port-vs-container-port healthcheck mismatch pattern seen elsewhere, but not
@@ -330,7 +345,9 @@ curl http://localhost:1337/parse/health    # from inside the EC2 instance
 Visit `http://<ec2-public-ip>:3000` in a browser to confirm the frontend is served
 and talking to the backend.
 
----
+![docker ps and UFW rules](screenshots/03-docker-ps-ufw.png)
+![Frontend live in the browser](screenshots/01-browser-3003.png)
+![Parse Dashboard live in the browser](screenshots/02-browser-4041.png)
 
 ## Deliverables produced
 
@@ -347,6 +364,9 @@ straight from ECR:
       — see the note in the ECR section above)
 - [x] Before/after image-size comparison table filled in for both images
 - [x] Full working deployment on a public EC2 instance, pulled from ECR
+- [x] Screenshots throughout backing up each claim — `ecr-deploy-user` and
+      `ec2-repository-role` IAM permissions, security group rules, `docker ps`,
+      and the live app in the browser
 
 ---
 
