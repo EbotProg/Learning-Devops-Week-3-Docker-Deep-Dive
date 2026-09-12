@@ -101,7 +101,7 @@ services:
       start_period: 15s
 
   database:
-    image: mongo:latest
+    image: mongo:7.0
     container_name: crud-database
     restart: unless-stopped
     ports:
