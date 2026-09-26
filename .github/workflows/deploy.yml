@@ -104,6 +104,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /home/ubuntu/app
+            aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin 110566986807.dkr.ecr.eu-north-1.amazonaws.com
             sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${{ needs.build-and-push.outputs.sha }}/" .env
             docker compose pull
             docker compose up -d
