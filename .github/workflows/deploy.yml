@@ -1,0 +1,121 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+    # paths: [".github/workflows/**"]
+  # dispatch_workflow:
+
+concurrency:
+  group: Deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: eu-north-1
+
+jobs:
+  lint-test:
+    name: Lint Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        application: ["CRUD-nextjs-frontend", "Crud-parse-server-backend"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: ${{ matrix.application }}/package-lock.json
+      - run: npm ci
+        working-directory: ${{ matrix.application }}
+      - run: npm run lint
+        working-directory: ${{ matrix.application }}
+
+  build-and-push:
+    needs: lint-test
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - id: sha
+        run: echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: ./CRUD-nextjs-frontend
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/crud-nextjs-frontend:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/crud-nextjs-frontend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: ./CRUD-parse-server-backend
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/crud-parse-server-backend:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/crud-parse-server-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # - name: Deploy via SSM
+      #   run: |
+      #     aws ssm send-command \
+      #       --instance-ids ${{ vars.APP_PUBLIC_INSTANCE_ID }}
+      #       --document-name "AWS-RunShellScript" \
+      #       --parameters commands='["cd/home/ubuntu/app","docker compose pull", "docker compose up -d"]'
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ vars.APP_PUBLIC_IP }}
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/ubuntu/app
+            sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${{ needs.build-and-push.outputs.sha }}/" .env
+            docker compose pull
+            docker compose up -d
+
+  notify:
+    needs: [lint-test, build-and-push, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Discord
+        run: |
+          STATUS="${{ needs.deploy.result }}"
+          curl -H "Content-Type: application/json" \
+            -d "{\"content\": \"Deploy ${STATUS} for commit ${{ github.sha }}\"}" \
+            ${{ secrets.DISCORD_WEBHOOK_URL }}
