@@ -19,7 +19,6 @@ env:
 
 jobs:
   lint-test:
-    name: Lint Test
     runs-on: ubuntu-latest
     strategy:
       matrix:
