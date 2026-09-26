@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        application: ["CRUD-nextjs-frontend", "Crud-parse-server-backend"]
+        application: ["CRUD-nextjs-frontend", "CRUD-parse-server-backend"]
     steps:
       - uses: actions/checkout@v4
         with:
