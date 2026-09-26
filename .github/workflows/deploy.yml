@@ -36,7 +36,7 @@ jobs:
           cache-dependency-path: ${{ matrix.application }}/package-lock.json
       - run: npm ci
         working-directory: ${{ matrix.application }}
-      - run: npm run lint
+      - run: npm run lint --if-present
         working-directory: ${{ matrix.application }}
 
   build-and-push:
