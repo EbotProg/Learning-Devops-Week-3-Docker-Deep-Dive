@@ -1,6 +1,8 @@
 [submodule "CRUD-nextjs-frontend"]
 	path = CRUD-nextjs-frontend
 	url = https://github.com/EbotProg/CRUD-nextjs-frontend.git
+	branch = crud-multistage-final
 [submodule "CRUD-parse-server-backend"]
 	path = CRUD-parse-server-backend
 	url = https://github.com/EbotProg/CRUD-parse-server-backend.git
+	branch = crud-multistage-final
