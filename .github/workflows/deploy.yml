@@ -2,9 +2,7 @@ name: Deploy
 
 on:
   push:
-    branches: [master]
-    # paths: [".github/workflows/**"]
-  # dispatch_workflow:
+    branches: [main]
 
 concurrency:
   group: Deploy-${{ github.ref }}
@@ -16,8 +14,11 @@ permissions:
 
 env:
   AWS_REGION: eu-north-1
+  # Week 8: must match the Terraform "project" variable (default ebotprog-w8)
+  PROJECT: ebotprog-w8
 
 jobs:
+  # ── UNCHANGED from Week 7 ─────────────────────────────────────────
   lint-test:
     name: Lint Test
     runs-on: ubuntu-latest
@@ -28,7 +29,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -39,6 +39,7 @@ jobs:
       - run: npm run lint --if-present
         working-directory: ${{ matrix.application }}
 
+  # ── CHANGED: frontend build now bakes in the ALB Parse URL ────────
   build-and-push:
     needs: lint-test
     runs-on: ubuntu-latest
@@ -50,27 +51,27 @@ jobs:
           submodules: true
       - id: sha
         run: echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
       - uses: aws-actions/amazon-ecr-login@v2
         id: login-ecr
-
       - uses: docker/setup-buildx-action@v3
-
       - uses: docker/build-push-action@v7
         with:
           context: ./CRUD-nextjs-frontend
           push: true
+          # NEW (Week 8): NEXT_PUBLIC_* values are baked into the browser bundle
+          # at BUILD time, so the image must know the ALB's Parse URL.
+          build-args: |
+            NEXT_PUBLIC_PARSE_APP_ID=${{ vars.PARSE_APP_ID }}
+            NEXT_PUBLIC_PARSE_SERVER_URL=${{ vars.PARSE_SERVER_URL }}
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/crud-nextjs-frontend:${{ github.sha }}
             ${{ steps.login-ecr.outputs.registry }}/crud-nextjs-frontend:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
       - uses: docker/build-push-action@v7
         with:
           context: ./CRUD-parse-server-backend
@@ -81,34 +82,58 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # ── REPLACED: SSH + docker compose → ECS built-in blue/green ───────
   deploy:
+    name: Deploy ${{ matrix.service }}
     needs: build-and-push
     runs-on: ubuntu-latest
     environment: production
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: frontend
+            repo: crud-nextjs-frontend
+          - service: backend
+            repo: crud-parse-server-backend
     steps:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # - name: Deploy via SSM
-      #   run: |
-      #     aws ssm send-command \
-      #       --instance-ids ${{ vars.APP_PUBLIC_INSTANCE_ID }}
-      #       --document-name "AWS-RunShellScript" \
-      #       --parameters commands='["cd/home/ubuntu/app","docker compose pull", "docker compose up -d"]'
-      - uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ vars.APP_PUBLIC_IP }}
-          username: ubuntu
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd /home/ubuntu/app
-            aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin 110566986807.dkr.ecr.eu-north-1.amazonaws.com
-            sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${{ needs.build-and-push.outputs.sha }}/" .env
-            docker compose pull
-            docker compose up -d
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
 
+      # 1. Start from the latest registered revision (Terraform created revision 1)
+      - name: Download current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "${PROJECT}-${{ matrix.service }}" \
+            --query taskDefinition > task-definition.json
+
+      # 2. Swap in the image built in this run (tagged with the commit SHA)
+      - name: Render new image into task definition
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ matrix.service }}
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ matrix.repo }}:${{ needs.build-and-push.outputs.sha }}
+
+      # 3. Register the new revision and update the service.
+      #    The service's BLUE_GREEN strategy turns this update into a blue/green
+      #    deployment: green tasks start → ALB weights flip → bake time → blue removed.
+      - name: Blue/green deploy (ECS built-in)
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          cluster: ${{ env.PROJECT }}-cluster
+          service: ${{ env.PROJECT }}-${{ matrix.service }}
+          wait-for-service-stability: true
+          wait-for-minutes: 20
+
+  # ── UNCHANGED from Week 7 ─────────────────────────────────────────
   notify:
     needs: [lint-test, build-and-push, deploy]
     if: always()
